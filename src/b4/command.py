@@ -120,6 +120,11 @@ def cmd_diff(cmdargs: argparse.Namespace) -> None:
     b4.diff.main(cmdargs)
 
 
+def cmd_ai_dig_ml(cmdargs: argparse.Namespace) -> None:
+    import b4.dig
+    b4.dig.main(cmdargs)
+
+
 class ConfigOption(argparse.Action):
     """Action class for storing key=value arguments in a dict."""
     def __call__(self, parser: argparse.ArgumentParser,
@@ -398,6 +403,21 @@ def setup_parser() -> argparse.ArgumentParser:
     ag_sendh.add_argument('--web-auth-verify', dest='auth_verify', metavar='VERIFY_TOKEN',
                           help='Submit the token received via verification email')
     sp_send.set_defaults(func=cmd_send)
+
+    # b4 ai dig-ml
+    sp_ai = subparsers.add_parser('ai', help='AI enabled commands')
+    ai_subparsers = sp_ai.add_subparsers(help='AI sub-command help', dest='ai_subcmd', required=True)
+
+    sp_ai_dig_ml = ai_subparsers.add_parser('dig-ml', help='Use AI agents to find related emails for a message')
+    sp_ai_dig_ml.add_argument('msgid', nargs='?',
+                              help='Message ID to analyze, or pipe a raw message')
+    sp_ai_dig_ml.add_argument('-o', '--output', dest='output', default=None,
+                              help='Output mbox filename (default: <msgid>-related.mbox)')
+    sp_ai_dig_ml.add_argument('-C', '--no-cache', dest='nocache', action='store_true', default=False,
+                              help='Do not use local cache when fetching messages')
+    sp_ai_dig_ml.add_argument('--stdin-pipe-sep',
+                              help='When accepting messages on stdin, split using this pipe separator string')
+    sp_ai_dig_ml.set_defaults(func=cmd_ai_dig_ml)
 
     return parser
 
