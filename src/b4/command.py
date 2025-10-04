@@ -130,6 +130,11 @@ def cmd_ai_cover(cmdargs: argparse.Namespace) -> None:
     b4.cover.main(cmdargs)
 
 
+def cmd_ai_style(cmdargs: argparse.Namespace) -> None:
+    import b4.style
+    b4.style.main(cmdargs)
+
+
 class ConfigOption(argparse.Action):
     """Action class for storing key=value arguments in a dict."""
     def __call__(self, parser: argparse.ArgumentParser,
@@ -436,6 +441,11 @@ def setup_parser() -> argparse.ArgumentParser:
     sp_ai_cover.add_argument('--max-commits', dest='max_commits', type=int, default=64,
                               help='Maximum number of commits to include in the prompt (default: 64)')
     sp_ai_cover.set_defaults(func=cmd_ai_cover)
+
+    sp_ai_style = ai_subparsers.add_parser('style', help='Normalize formatting of generated text without altering content')
+    import b4.style as _b4_style
+    _b4_style.setup_parser(sp_ai_style)
+    sp_ai_style.set_defaults(func=cmd_ai_style)
 
     return parser
 
