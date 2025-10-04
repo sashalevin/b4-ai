@@ -125,6 +125,11 @@ def cmd_ai_dig_ml(cmdargs: argparse.Namespace) -> None:
     b4.dig.main(cmdargs)
 
 
+def cmd_ai_cover(cmdargs: argparse.Namespace) -> None:
+    import b4.cover
+    b4.cover.main(cmdargs)
+
+
 class ConfigOption(argparse.Action):
     """Action class for storing key=value arguments in a dict."""
     def __call__(self, parser: argparse.ArgumentParser,
@@ -418,6 +423,19 @@ def setup_parser() -> argparse.ArgumentParser:
     sp_ai_dig_ml.add_argument('--stdin-pipe-sep',
                               help='When accepting messages on stdin, split using this pipe separator string')
     sp_ai_dig_ml.set_defaults(func=cmd_ai_dig_ml)
+
+    sp_ai_cover = ai_subparsers.add_parser('cover', help='Draft a cover letter for a patch series or topic branch')
+    sp_ai_cover.add_argument('series',
+                             help='Revision range or branch containing the series to summarize (e.g., origin/main..topic)')
+    sp_ai_cover.add_argument('--base',
+                              help='Explicit base commit or branch to diff against when series is a single branch')
+    sp_ai_cover.add_argument('--style-file',
+                              help='Existing cover letter to analyze for style guidance')
+    sp_ai_cover.add_argument('-o', '--output', dest='output',
+                              help='Write the drafted cover letter to this path instead of stdout')
+    sp_ai_cover.add_argument('--max-commits', dest='max_commits', type=int, default=64,
+                              help='Maximum number of commits to include in the prompt (default: 64)')
+    sp_ai_cover.set_defaults(func=cmd_ai_cover)
 
     return parser
 

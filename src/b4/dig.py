@@ -8,45 +8,27 @@ __author__ = 'Sasha Levin <sashal@kernel.org>'
 
 import argparse
 import logging
-import subprocess
 import sys
 import os
-import tempfile
 import json
 import email.utils
-import shlex
-import shutil
 import datetime
 import re
 from typing import Optional, List, Dict, Any, Iterable, Set
 
 import b4
+from b4.ai import sanitize_msgid, call_agent
 
 logger = b4.logger
 
 
-DEFAULT_AGENT_TIMEOUT = 300
 _MSGID_FALLBACK_RE = re.compile(r'(?P<msgid>[0-9A-Za-z][^\s<>@]*@[0-9A-Za-z][^\s<>@]*)')
-
-
-def _sanitize_msgid(raw: Optional[str]) -> str:
-    """Return a msgid without surrounding whitespace or angle brackets."""
-
-    if not raw:
-        return ''
-
-    msgid = raw.strip()
-    if msgid.startswith('<'):
-        msgid = msgid[1:]
-    if msgid.endswith('>'):
-        msgid = msgid[:-1]
-    return msgid.strip()
 
 
 def construct_agent_prompt(msgid: str) -> str:
     """Construct a detailed prompt for the AI agent to find related emails."""
 
-    msgid = _sanitize_msgid(msgid)
+    msgid = sanitize_msgid(msgid)
 
     prompt = f"""You are an email research assistant specialized in finding related emails in Linux kernel mailing lists and public-inbox archives.
 
@@ -356,79 +338,6 @@ Begin your comprehensive search and analysis for message ID: {msgid}
     return prompt
 
 
-def call_agent(prompt: str, agent_cmd: str, timeout: int = DEFAULT_AGENT_TIMEOUT) -> Optional[str]:
-    """Call the configured agent command with the constructed prompt."""
-
-    agent_cmd = agent_cmd.strip()
-    if not agent_cmd:
-        logger.error('Agent command is empty')
-        return None
-
-    try:
-        cmd_parts = shlex.split(agent_cmd)
-    except ValueError as exc:
-        logger.error('Invalid agent command: %s', exc)
-        return None
-
-    if not cmd_parts:
-        logger.error('Agent command is empty after parsing')
-        return None
-
-    executable = os.path.expanduser(cmd_parts[0])
-    if os.path.sep in executable:
-        if not os.path.exists(executable):
-            logger.error('Agent command not found: %s', executable)
-            return None
-        if not os.access(executable, os.X_OK):
-            logger.error('Agent command is not executable: %s', executable)
-            return None
-        cmd_parts[0] = executable
-    else:
-        resolved = shutil.which(cmd_parts[0])
-        if not resolved:
-            logger.error('Agent command not found in PATH: %s', cmd_parts[0])
-            return None
-        cmd_parts[0] = resolved
-
-    try:
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as tmp:
-            tmp.write(prompt)
-            tmp_path = tmp.name
-
-        cmd_with_prompt = cmd_parts + [tmp_path]
-        logger.info('Calling agent: %s', ' '.join(shlex.quote(part) for part in cmd_with_prompt))
-
-        result = subprocess.run(
-            cmd_with_prompt,
-            capture_output=True,
-            text=True,
-            timeout=timeout
-        )
-
-        if result.returncode != 0:
-            logger.error('Agent returned error code %d', result.returncode)
-            if result.stderr:
-                logger.error('Agent stderr: %s', result.stderr.strip())
-            if result.stdout:
-                logger.debug('Agent stdout: %s', result.stdout.strip())
-            return None
-
-        return result.stdout
-
-    except subprocess.TimeoutExpired:
-        logger.error('Agent command timed out after %d seconds', timeout)
-        return None
-    except Exception as exc:
-        logger.error('Error calling agent: %s', exc)
-        return None
-    finally:
-        if 'tmp_path' in locals():
-            try:
-                os.unlink(tmp_path)
-            except OSError:
-                logger.debug('Failed to remove temporary file %s', tmp_path)
-
-
 def parse_agent_response(response: str) -> List[Dict[str, str]]:
     """Parse the agent's response to extract message relationships."""
 
@@ -436,7 +345,7 @@ def parse_agent_response(response: str) -> List[Dict[str, str]]:
     seen: Set[str] = set()
 
     def _append(msgid: Optional[str], relationship: Optional[str], reason: Optional[str]) -> None:
-        clean_msgid = _sanitize_msgid(msgid)
+        clean_msgid = sanitize_msgid(msgid)
         if not clean_msgid or clean_msgid in seen:
             return
         seen.add(clean_msgid)
@@ -501,7 +410,7 @@ def download_and_combine_threads(msgid: str, related_messages: List[Dict[str, st
     def _unique_msgids() -> Iterable[str]:
         seen_local: Set[str] = set()
         for candidate in [msgid] + [item.get('msgid') for item in related_messages if isinstance(item, dict)]:
-            clean = _sanitize_msgid(candidate)
+            clean = sanitize_msgid(candidate)
             if not clean or clean in seen_local:
                 continue
             seen_local.add(clean)
@@ -567,7 +476,7 @@ def main(cmdargs: argparse.Namespace) -> None:
         logger.critical('Please provide a message-id')
         sys.exit(1)
 
-    msgid = _sanitize_msgid(msgid)
+    msgid = sanitize_msgid(msgid)
     if not msgid:
         logger.critical('Message-id could not be parsed')
         sys.exit(1)
